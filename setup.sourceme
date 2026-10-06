@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+#
+# setup.sourceme — Create a project-local Python virtual environment and
+#                  install all dependencies for the ATC DDS demo.
+#
+# Usage (bash or zsh):
+#   source setup.sourceme
+#
+# The virtual environment is created at venv and activated in the calling
+# shell. Because this file is sourced, it must not change the caller's shell
+# options (no `set -e`, `set -u`, or `set -o pipefail`, which would stay on in
+# the interactive shell and close it on the next failing command), and it
+# must use `return`, never `exit`.
+
+_atc_setup() {
+    local script_path="$1"
+    local project_dir venv_dir requirements_dds local_env_file python
+
+    project_dir="$(cd "$(dirname "$script_path")" && pwd)" || return 1
+    venv_dir="$project_dir/venv"
+    requirements_dds="$project_dir/python/requirements.txt"
+
+    # ── Persistent local configuration ─────────────────────────────────────
+    local_env_file="$project_dir/.env.local"
+    if [[ -f "$local_env_file" ]]; then
+        echo "Loading local configuration from $local_env_file"
+        set -a
+        source "$local_env_file"
+        set +a
+    fi
+
+    # ── Determine Python version ───────────────────────────────────────────
+    python="${PYTHON:-python3}"
+    if ! command -v "$python" >/dev/null 2>&1; then
+        echo "ERROR: Python interpreter not found: $python"
+        return 1
+    fi
+    echo "Python: $("$python" --version)"
+
+    # ── Create virtual environment ─────────────────────────────────────────
+    if [[ -d "$venv_dir" ]]; then
+        echo "Virtual environment already exists at $venv_dir"
+        echo "To recreate, remove it first:  rm -rf $venv_dir"
+    else
+        echo "Creating virtual environment at $venv_dir ..."
+        "$python" -m venv "$venv_dir" || return 1
+    fi
+
+    # ── Activate and install ───────────────────────────────────────────────
+    source "$venv_dir/bin/activate" || return 1
+
+    echo "Upgrading pip..."
+    pip install --upgrade pip --quiet || return 1
+
+    echo "Installing requirements (Connext DDS)..."
+    pip install -r "$requirements_dds" --quiet || return 1
+
+    echo ""
+    echo "============================================"
+    echo "  Environment ready!"
+    echo "  Activate with:  source $venv_dir/bin/activate"
+    echo "============================================"
+}
+
+# Locate this file in both bash and zsh. zsh has no BASH_SOURCE; its %x prompt
+# escape gives the file being sourced. eval keeps bash from parsing zsh syntax.
+if [[ -n "${BASH_VERSION:-}" ]]; then
+    _atc_setup_src="${BASH_SOURCE[0]}"
+elif [[ -n "${ZSH_VERSION:-}" ]]; then
+    eval '_atc_setup_src="${(%):-%x}"'
+else
+    _atc_setup_src="./setup.sourceme"
+fi
+
+if _atc_setup "$_atc_setup_src"; then
+    unset -f _atc_setup
+    unset _atc_setup_src
+else
+    unset -f _atc_setup
+    unset _atc_setup_src
+    echo "ERROR: Environment setup failed (see messages above)."
+    return 1
+fi

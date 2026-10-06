@@ -1,0 +1,516 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 Real-Time Innovations, Inc. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<dds xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+     xsi:noNamespaceSchemaLocation=
+       "https://community.rti.com/schema/7.7.0/rti_dds_qos_profiles.xsd"
+     version="7.7.0">
+
+    <qos_library name="AirTrafficControl_QosLib">
+
+        <qos_profile name="MonitoringNoShMemParticipantProfile"
+                     base_name="BuiltinQosLib::Generic.Monitoring2">
+            <domain_participant_qos>
+                <transport_builtin>
+                    <mask>UDPv4</mask>
+                </transport_builtin>
+            </domain_participant_qos>
+        </qos_profile>
+
+        <!--
+            AtcParticipantProfile
+            Base participant profile with discovery and monitoring optimizations
+        -->
+        <qos_profile name="AtcParticipantProfile"
+                     base_name="BuiltinQosLib::Generic.Common"
+                     is_default_participant_factory_profile="true">
+            <participant_factory_qos>
+                <monitoring>
+                    <distribution_settings>
+                        <dedicated_participant>
+                            <participant_qos_profile_name>
+                                AirTrafficControl_QosLib::MonitoringNoShMemParticipantProfile
+                            </participant_qos_profile_name>
+                        </dedicated_participant>
+                    </distribution_settings>
+                </monitoring>
+            </participant_factory_qos>
+            <domain_participant_qos>
+                <base_name>
+                    <element>BuiltinQosSnippetLib::Optimization.Discovery.Common</element>
+                    <element>BuiltinQosSnippetLib::Optimization.Discovery.Endpoint.Fast</element>
+                    <element>BuiltinQosSnippetLib::Optimization.ReliabilityProtocol.Common</element>
+                    <!-- To use TypeObject V1 instead of V2 
+                        <element>BuiltinQosSnippetLib::Feature.TypeSupport.V2.Disable</element>
+                        <element>BuiltinQosSnippetLib::Feature.TypeSupport.V1.Enable</element>
+                    -->
+                </base_name>
+                <discovery_config>
+                    <!-- SPDP2 is more efficient but must be explicitly enabled 
+                        <builtin_discovery_plugins>SPDP2 | SEDP</builtin_discovery_plugins>
+                    -->
+                    <!-- SPDP1 is the default for backward compatibility and interoperability with other vendors -->
+                    <builtin_discovery_plugins>SPDP | SEDP</builtin_discovery_plugins>
+                </discovery_config>
+                <!-- Disable shared memory: avoids macOS semaphore/resource
+                     exhaustion when running many participants on one host. -->
+                <transport_builtin>
+                    <mask>UDPv4</mask>
+                </transport_builtin>
+            </domain_participant_qos>
+        </qos_profile>
+
+        <!--
+            ReliableCommandProfile (base)
+            Reliable, keep-all, transient-local, priority 5
+            No deadline — these are aperiodic event-driven topics.
+        -->
+        <qos_profile name="ReliableCommandProfile"
+                     base_name="BuiltinQosLib::Generic.StrictReliable"
+                     is_default_qos="false">
+
+            <base_name>
+                <element>BuiltinQosSnippetLib::QosPolicy.Durability.TransientLocal</element>
+            </base_name>
+
+            <datawriter_qos>
+                <liveliness>
+                    <kind>AUTOMATIC_LIVELINESS_QOS</kind>
+                    <lease_duration>
+                        <sec>10</sec>
+                        <nanosec>0</nanosec>
+                    </lease_duration>
+                </liveliness>
+                <transport_priority>
+                    <value>5</value>
+                </transport_priority>
+                <reliability>
+                    <kind>RELIABLE_RELIABILITY_QOS</kind>
+                    <max_blocking_time>
+                        <sec>5</sec>
+                        <nanosec>0</nanosec>
+                    </max_blocking_time>
+                </reliability>
+                <history>
+                    <kind>KEEP_ALL_HISTORY_QOS</kind>
+                </history>
+                <durability>
+                    <kind>TRANSIENT_LOCAL_DURABILITY_QOS</kind>
+                </durability>
+            </datawriter_qos>
+
+            <datareader_qos>
+                <liveliness>
+                    <kind>AUTOMATIC_LIVELINESS_QOS</kind>
+                    <lease_duration>
+                        <sec>10</sec>
+                        <nanosec>0</nanosec>
+                    </lease_duration>
+                </liveliness>
+                <transport_priority>
+                    <value>5</value>
+                </transport_priority>
+                <reliability>
+                    <kind>RELIABLE_RELIABILITY_QOS</kind>
+                </reliability>
+                <history>
+                    <kind>KEEP_ALL_HISTORY_QOS</kind>
+                </history>
+                <durability>
+                    <kind>TRANSIENT_LOCAL_DURABILITY_QOS</kind>
+                </durability>
+            </datareader_qos>
+        </qos_profile>
+
+        <!--
+            StateDataProfile (base)
+            Reliable, keep-last-1, transient-local, exclusive ownership.
+            Not used directly — per-topic profiles below inherit from this.
+        -->
+        <qos_profile name="StateDataProfile"
+                     base_name="BuiltinQosLib::Pattern.Status"
+                     is_default_qos="false">
+
+            <datawriter_qos>
+                <reliability>
+                    <kind>RELIABLE_RELIABILITY_QOS</kind>
+                    <max_blocking_time>
+                        <sec>5</sec>
+                        <nanosec>0</nanosec>
+                    </max_blocking_time>
+                </reliability>
+                <history>
+                    <kind>KEEP_LAST_HISTORY_QOS</kind>
+                    <depth>1</depth>
+                </history>
+                <durability>
+                    <kind>TRANSIENT_LOCAL_DURABILITY_QOS</kind>
+                </durability>
+                <ownership>
+                    <kind>EXCLUSIVE_OWNERSHIP_QOS</kind>
+                </ownership>
+            </datawriter_qos>
+
+            <datareader_qos>
+                <reliability>
+                    <kind>RELIABLE_RELIABILITY_QOS</kind>
+                </reliability>
+                <history>
+                    <kind>KEEP_LAST_HISTORY_QOS</kind>
+                    <depth>1</depth>
+                </history>
+                <durability>
+                    <kind>TRANSIENT_LOCAL_DURABILITY_QOS</kind>
+                </durability>
+                <ownership>
+                    <kind>EXCLUSIVE_OWNERSHIP_QOS</kind>
+                </ownership>
+            </datareader_qos>
+        </qos_profile>
+
+        <!--
+            HandoffProfile
+            Topic: Handoff
+            Reliable, keep-last-5, transient-local, manual-by-topic liveliness
+        -->
+        <qos_profile name="HandoffProfile"
+                     base_name="BuiltinQosLib::Generic.KeepLastReliable.TransientLocal"
+                     is_default_qos="false">
+
+            <datawriter_qos>
+                <reliability>
+                    <kind>RELIABLE_RELIABILITY_QOS</kind>
+                    <max_blocking_time>
+                        <sec>5</sec>
+                        <nanosec>0</nanosec>
+                    </max_blocking_time>
+                </reliability>
+                <history>
+                    <kind>KEEP_LAST_HISTORY_QOS</kind>
+                    <depth>5</depth>
+                </history>
+                <durability>
+                    <kind>TRANSIENT_LOCAL_DURABILITY_QOS</kind>
+                </durability>
+                <liveliness>
+                    <kind>MANUAL_BY_TOPIC_LIVELINESS_QOS</kind>
+                    <lease_duration>
+                        <sec>15</sec>
+                        <nanosec>0</nanosec>
+                    </lease_duration>
+                </liveliness>
+            </datawriter_qos>
+
+            <datareader_qos>
+                <reliability>
+                    <kind>RELIABLE_RELIABILITY_QOS</kind>
+                </reliability>
+                <history>
+                    <kind>KEEP_LAST_HISTORY_QOS</kind>
+                    <depth>5</depth>
+                </history>
+                <durability>
+                    <kind>TRANSIENT_LOCAL_DURABILITY_QOS</kind>
+                </durability>
+                <liveliness>
+                    <kind>MANUAL_BY_TOPIC_LIVELINESS_QOS</kind>
+                    <lease_duration>
+                        <sec>15</sec>
+                        <nanosec>0</nanosec>
+                    </lease_duration>
+                </liveliness>
+            </datareader_qos>
+        </qos_profile>
+
+        <!--
+            Request/Reply Profiles
+            Based on BuiltinQosLib::Pattern.RPC
+        -->
+        <qos_profile name="FlightPlanRequestReplyProfile"
+                     base_name="BuiltinQosLib::Pattern.RPC"
+                     is_default_qos="false">
+            <datawriter_qos>
+                <reliability>
+                    <max_blocking_time>
+                        <sec>2</sec>
+                        <nanosec>0</nanosec>
+                    </max_blocking_time>
+                </reliability>
+            </datawriter_qos>
+        </qos_profile>
+
+        <qos_profile name="GateAssignmentRequestReplyProfile"
+                     base_name="BuiltinQosLib::Pattern.RPC"
+                     is_default_qos="false">
+            <datawriter_qos>
+                <reliability>
+                    <max_blocking_time>
+                        <sec>2</sec>
+                        <nanosec>0</nanosec>
+                    </max_blocking_time>
+                </reliability>
+            </datawriter_qos>
+        </qos_profile>
+
+        <!--
+            ════════════════════════════════════════════════════════════════
+            Per-topic profiles
+            Each topic gets its own profile inheriting from a base above.
+            App code references these by topic name — the mapping from
+            topic to QoS behavior is explicit and self-documenting.
+            ════════════════════════════════════════════════════════════════
+        -->
+
+        <!--
+            AircraftPositionProfile
+            Topic: AircraftPosition — 5 Hz periodic telemetry
+            Best-effort, volatile, exclusive ownership
+            Writer deadline 300ms (1.5× period), reader deadline 500ms (2.5× period)
+        -->
+        <qos_profile name="AircraftPositionProfile"
+                     base_name="BuiltinQosLib::Pattern.PeriodicData"
+                     is_default_qos="false">
+
+            <datawriter_qos>
+                <deadline>
+                    <period>
+                        <sec>0</sec>
+                        <nanosec>300000000</nanosec>
+                    </period>
+                </deadline>
+                <lifespan>
+                    <duration>
+                        <sec>1</sec>
+                        <nanosec>0</nanosec>
+                    </duration>
+                </lifespan>
+                <reliability>
+                    <kind>BEST_EFFORT_RELIABILITY_QOS</kind>
+                </reliability>
+                <history>
+                    <kind>KEEP_LAST_HISTORY_QOS</kind>
+                    <depth>1</depth>
+                </history>
+                <durability>
+                    <kind>VOLATILE_DURABILITY_QOS</kind>
+                </durability>
+                <ownership>
+                    <kind>EXCLUSIVE_OWNERSHIP_QOS</kind>
+                </ownership>
+            </datawriter_qos>
+
+            <datareader_qos>
+                <deadline>
+                    <period>
+                        <sec>0</sec>
+                        <nanosec>500000000</nanosec>
+                    </period>
+                </deadline>
+                <reliability>
+                    <kind>BEST_EFFORT_RELIABILITY_QOS</kind>
+                </reliability>
+                <history>
+                    <kind>KEEP_LAST_HISTORY_QOS</kind>
+                    <depth>1</depth>
+                </history>
+                <durability>
+                    <kind>VOLATILE_DURABILITY_QOS</kind>
+                </durability>
+                <ownership>
+                    <kind>EXCLUSIVE_OWNERSHIP_QOS</kind>
+                </ownership>
+            </datareader_qos>
+        </qos_profile>
+
+        <!--
+            AircraftPositionTrajectoryProfile
+            For readers that must see every position between their control
+            steps (tower, TRACON). Same contract as AircraftPositionProfile;
+            the reader keeps the last 5 samples per aircraft instead of only
+            the latest.
+            depth = publication rate x control step period
+                  = 5 Hz (airplanes publish position at 5 Hz wall time)
+                  x 1 s  (controller steps run at most once per wall second)
+                  = 5, so no sample published between two steps is lost.
+            Recompute it if either rate changes.
+        -->
+        <qos_profile name="AircraftPositionTrajectoryProfile"
+                     base_name="AirTrafficControl_QosLib::AircraftPositionProfile"
+                     is_default_qos="false">
+            <datareader_qos>
+                <history>
+                    <kind>KEEP_LAST_HISTORY_QOS</kind>
+                    <depth>5</depth>
+                </history>
+            </datareader_qos>
+        </qos_profile>
+        <!-- Topic: ControllerInstruction — reliable command from ATC -->
+        <qos_profile name="ControllerInstructionProfile"
+                     base_name="AirTrafficControl_QosLib::ReliableCommandProfile"
+                     is_default_qos="false"/>
+
+        <!-- Topic: PilotAcknowledgment — reliable ack from pilot -->
+        <qos_profile name="PilotAcknowledgmentProfile"
+                     base_name="AirTrafficControl_QosLib::ReliableCommandProfile"
+                     is_default_qos="false"/>
+
+        <!--
+            AlertProfile
+            Topic: Alert — high-priority broadcast
+            Reliable, keep-all, transient-local, lifespan 60s, priority 10
+        -->
+        <qos_profile name="AlertProfile"
+                     base_name="BuiltinQosLib::Pattern.Event"
+                     is_default_qos="false">
+
+            <base_name>
+                <element>BuiltinQosSnippetLib::QosPolicy.Durability.TransientLocal</element>
+            </base_name>
+
+            <datawriter_qos>
+                <lifespan>
+                    <duration>
+                        <sec>60</sec>
+                        <nanosec>0</nanosec>
+                    </duration>
+                </lifespan>
+                <transport_priority>
+                    <value>10</value>
+                </transport_priority>
+                <reliability>
+                    <kind>RELIABLE_RELIABILITY_QOS</kind>
+                    <max_blocking_time>
+                        <sec>5</sec>
+                        <nanosec>0</nanosec>
+                    </max_blocking_time>
+                </reliability>
+                <history>
+                    <kind>KEEP_ALL_HISTORY_QOS</kind>
+                </history>
+                <durability>
+                    <kind>TRANSIENT_LOCAL_DURABILITY_QOS</kind>
+                </durability>
+            </datawriter_qos>
+
+            <datareader_qos>
+                <time_based_filter>
+                    <minimum_separation>
+                        <sec>0</sec>
+                        <nanosec>0</nanosec>
+                    </minimum_separation>
+                </time_based_filter>
+                <transport_priority>
+                    <value>10</value>
+                </transport_priority>
+                <reliability>
+                    <kind>RELIABLE_RELIABILITY_QOS</kind>
+                </reliability>
+                <history>
+                    <kind>KEEP_ALL_HISTORY_QOS</kind>
+                </history>
+                <durability>
+                    <kind>TRANSIENT_LOCAL_DURABILITY_QOS</kind>
+                </durability>
+            </datareader_qos>
+        </qos_profile>
+
+        <!-- Topic: WeatherReport — state data, 30-min sim-time cadence.
+             Deadline = 2700s (1.5× publication interval at speed=1).
+             Scaled at runtime by writer_qos_for_speed(). -->
+        <qos_profile name="WeatherReportProfile"
+                     base_name="AirTrafficControl_QosLib::StateDataProfile"
+                     is_default_qos="false">
+            <datawriter_qos>
+                <deadline>
+                    <period>
+                        <sec>2700</sec>
+                        <nanosec>0</nanosec>
+                    </period>
+                </deadline>
+            </datawriter_qos>
+        </qos_profile>
+
+        <!-- Topic: RunwayStatus — plain state data -->
+        <qos_profile name="RunwayStatusProfile"
+                     base_name="AirTrafficControl_QosLib::StateDataProfile"
+                     is_default_qos="false"/>
+
+        <!-- Topic: FlightPlan — plain state data -->
+        <qos_profile name="FlightPlanProfile"
+                     base_name="AirTrafficControl_QosLib::StateDataProfile"
+                     is_default_qos="false"/>
+
+        <!--
+            AircraftTrackingProfile
+            Topic: AircraftTracking — current controller of record.
+            Overrides StateDataProfile's EXCLUSIVE_OWNERSHIP with
+            SHARED_OWNERSHIP + BY_SOURCE_TIMESTAMP so that cooperative
+            handoffs converge without race conditions.  During handoff,
+            both the releasing and accepting controller may briefly write
+            the same instance; BY_SOURCE_TIMESTAMP ensures all readers
+            converge on the newest sample regardless of arrival order.
+        -->
+        <qos_profile name="AircraftTrackingProfile"
+                     base_name="AirTrafficControl_QosLib::StateDataProfile"
+                     is_default_qos="false">
+            <datawriter_qos>
+                <ownership>
+                    <kind>SHARED_OWNERSHIP_QOS</kind>
+                </ownership>
+                <destination_order>
+                    <kind>BY_SOURCE_TIMESTAMP_DESTINATIONORDER_QOS</kind>
+                </destination_order>
+            </datawriter_qos>
+            <datareader_qos>
+                <ownership>
+                    <kind>SHARED_OWNERSHIP_QOS</kind>
+                </ownership>
+                <destination_order>
+                    <kind>BY_SOURCE_TIMESTAMP_DESTINATIONORDER_QOS</kind>
+                </destination_order>
+            </datareader_qos>
+        </qos_profile>
+
+        <!-- Topic: FacilityStatus — state data + manual-by-topic liveliness
+             so dashboard can detect facility crashes within 5 seconds -->
+        <qos_profile name="FacilityStatusProfile"
+                     base_name="AirTrafficControl_QosLib::StateDataProfile"
+                     is_default_qos="false">
+            <datawriter_qos>
+                <liveliness>
+                    <kind>MANUAL_BY_TOPIC_LIVELINESS_QOS</kind>
+                    <lease_duration>
+                        <sec>5</sec>
+                        <nanosec>0</nanosec>
+                    </lease_duration>
+                </liveliness>
+            </datawriter_qos>
+            <datareader_qos>
+                <liveliness>
+                    <kind>MANUAL_BY_TOPIC_LIVELINESS_QOS</kind>
+                    <lease_duration>
+                        <sec>5</sec>
+                        <nanosec>0</nanosec>
+                    </lease_duration>
+                </liveliness>
+            </datareader_qos>
+        </qos_profile>
+
+        <!-- Topic: ConvectiveCell — state data, 5-min sim-time cadence.
+             Deadline = 450s (1.5× publication interval at speed=1).
+             Scaled at runtime by writer_qos_for_speed(). -->
+        <qos_profile name="ConvectiveCellProfile"
+                     base_name="AirTrafficControl_QosLib::StateDataProfile"
+                     is_default_qos="false">
+            <datawriter_qos>
+                <deadline>
+                    <period>
+                        <sec>450</sec>
+                        <nanosec>0</nanosec>
+                    </period>
+                </deadline>
+            </datawriter_qos>
+        </qos_profile>
+
+    </qos_library>
+</dds>

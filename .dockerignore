@@ -1,0 +1,19 @@
+# Exclude everything by default. Re-include only files consumed by Dockerfile.
+# In particular, this keeps docker/.local/ and its staged license out of images.
+**
+
+!.dockerignore
+!LICENSE
+!air_traffic_scenario.json
+!air_traffic_qos.xml
+
+!python/
+!python/*.py
+!python/requirements.txt
+!scripts/
+!scripts/demo_cli.py
+!scripts/demo_start.sh
+
+!docker/
+!docker/Dockerfile
+!docker/docker-entrypoint.sh
