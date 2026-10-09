@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # SPDX-FileCopyrightText: 2026 Real-Time Innovations, Inc.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -13,45 +13,51 @@
 #   ./demo_stop.sh tower KJFK       # stop only the KJFK tower
 #   ./demo_stop.sh center tower     # stop all centers and towers
 #
+# Written for bash 3.2 (the macOS /bin/bash): no associative arrays or
+# ${var,,} case conversion.
+#
 set -o pipefail
 
-declare -A APP_MAP=(
-    [flightplan]="app_flightplan_service.py"
-    [airport]="app_airport.py"
-    [tower]="app_tower.py"
-    [tracon]="app_tracon.py"
-    [center]="app_center.py"
-    [airplane]="app_airplane.py"
-    [dashboard]="app_dashboard.py"
-    [weather]="app_weather_service.py"
-)
+APP_NAMES="flightplan airport tower tracon center airplane dashboard weather"
 
-# Build list of (pattern, instance_filter) pairs
+# Print the script for an app name; fail for an unknown name.
+app_script() {
+    case "$1" in
+        flightplan) echo "app_flightplan_service.py" ;;
+        airport)    echo "app_airport.py" ;;
+        tower)      echo "app_tower.py" ;;
+        tracon)     echo "app_tracon.py" ;;
+        center)     echo "app_center.py" ;;
+        airplane)   echo "app_airplane.py" ;;
+        dashboard)  echo "app_dashboard.py" ;;
+        weather)    echo "app_weather_service.py" ;;
+        *)          return 1 ;;
+    esac
+}
+
+lowercase() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+
+# Build list of "script|instance" search entries
 searches=()
 
 if (( $# > 0 )); then
     while (( $# > 0 )); do
-        key="${1,,}"  # lowercase
-        if [[ -z "${APP_MAP[$key]+_}" ]]; then
-            echo "Unknown app: $1 (valid: ${!APP_MAP[*]})"
+        if ! script="$(app_script "$(lowercase "$1")")"; then
+            echo "Unknown app: $1 (valid: $APP_NAMES)"
             exit 1
         fi
-        pattern="${APP_MAP[$key]}"
         shift
         # Check if next arg is an instance ID (not an app name)
         instance=""
-        if (( $# > 0 )); then
-            next="${1,,}"
-            if [[ -z "${APP_MAP[$next]+_}" ]]; then
-                instance="$1"
-                shift
-            fi
+        if (( $# > 0 )) && ! app_script "$(lowercase "$1")" >/dev/null; then
+            instance="$1"
+            shift
         fi
-        searches+=("$pattern|$instance")
+        searches+=("$script|$instance")
     done
 else
-    for pattern in "${APP_MAP[@]}"; do
-        searches+=("$pattern|")
+    for name in $APP_NAMES; do
+        searches+=("$(app_script "$name")|")
     done
 fi
 
@@ -60,14 +66,16 @@ fi
 # process, longer when the whole demo shuts down at once.
 GRACE_SECONDS="${GRACE_SECONDS:-10}"
 
-# Print the PIDs matching one "pattern|instance" search entry.
+# Print the PIDs matching one "script|instance" search entry. Requiring the
+# Python interpreter before the script keeps editors and pagers that have the
+# file open (e.g. "vim python/app_center.py") from matching.
 find_pids() {
-    local pattern="${1%%|*}"
+    local pattern="[Pp]ython[0-9.]* .*${1%%|*}"
     local instance="${1#*|}"
     if [[ -n "$instance" ]]; then
-        # Match processes whose command line contains both the script and the instance ID
+        # Match processes whose command line also contains the instance ID
         pgrep -f "$pattern" 2>/dev/null | while read -r pid; do
-            if ps -p "$pid" -o args= 2>/dev/null | grep -q "$instance"; then
+            if ps -p "$pid" -o args= 2>/dev/null | grep -q -- "$instance"; then
                 echo "$pid"
             fi
         done
@@ -89,7 +97,7 @@ for pid in $(find_all_pids); do
     cmdline=$(ps -p "$pid" -o args= 2>/dev/null || true)
     echo "Stopping PID $pid: $cmdline"
     kill "$pid" 2>/dev/null || true
-    ((killed++))
+    killed=$((killed + 1))
 done
 
 if (( killed == 0 )); then
@@ -99,14 +107,14 @@ else
     waited=0
     while [[ -n "$(find_all_pids)" ]] && (( waited < GRACE_SECONDS )); do
         sleep 1
-        ((waited++))
+        waited=$((waited + 1))
     done
     # Escalate to SIGKILL for any survivors.
     survivors=0
     for pid in $(find_all_pids); do
         echo "Force-killing PID $pid (did not exit within ${GRACE_SECONDS}s of SIGTERM)"
         kill -9 "$pid" 2>/dev/null || true
-        ((survivors++))
+        survivors=$((survivors + 1))
     done
     if (( survivors > 0 )); then
         echo "Force-killed $survivors stubborn process(es)."

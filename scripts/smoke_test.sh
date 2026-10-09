@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # SPDX-FileCopyrightText: 2026 Real-Time Innovations, Inc.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -58,7 +58,7 @@ if [[ ! -x "$PYTHON" ]]; then
     echo "ERROR: Python not found at $PYTHON. Run 'source setup.sourceme' first."
     exit 2
 fi
-if pgrep -f 'app_.*\.py' >/dev/null 2>&1; then
+if pgrep -f '[Pp]ython[0-9.]* .*app_[a-z_]+\.py' >/dev/null 2>&1; then
     echo "ERROR: ATC demo apps are already running. Stop them with scripts/demo_stop.sh."
     exit 2
 fi
