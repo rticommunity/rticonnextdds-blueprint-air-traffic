@@ -5,11 +5,12 @@ Python implementation of the Air Traffic Control simulation using RTI Connext DD
 ## Prerequisites
 
 - Python 3.10+
-- An **RTI Connext DDS license file**. A Connext installation isn't needed to
-  run the apps, because the `rti.connext` package is installed from PyPI.
-  Regenerating types does need a full
-  [RTI Connext DDS installation](https://community.rti.com/static/documentation/developers/)
-  (for `rtiddsgen`).
+- An **RTI Connext DDS license file**; see the
+  [top-level README](../README.md#connext-dds) for how to get a free one. A
+  Connext installation isn't needed to run the apps, because the
+  `rti.connext` package is installed from PyPI. Regenerating types does need
+  a full RTI Connext DDS installation (for `rtiddsgen`); follow the
+  instructions at [evaluation.rti.com](https://evaluation.rti.com).
 - The virtual environment, set up from the repository root with
   `source setup.sourceme`. It installs [`requirements.txt`](requirements.txt).
 - `RTI_LICENSE_FILE` and `CARTO_BASEMAP_API_KEY` set in the repository's

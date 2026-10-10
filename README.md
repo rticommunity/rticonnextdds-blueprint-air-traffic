@@ -8,15 +8,6 @@ towers, TRACONs, en-route centers, and shared services each run as
 independent applications that share one data space. None of them opens a
 connection to another or knows where another runs.
 
-| Connext DDS capability | What it does in this system |
-|---|---|
-| **Data-centric pub/sub** | Each aircraft writes its position once; every interested facility receives it |
-| **Writer-side content filtering** | Each facility subscribes only to its airspace or airport, and unmatched data never leaves the publisher |
-| **Durability (transient-local)** | Late-joining or restarted facilities get current flight plans, tracking state, and runway status immediately |
-| **Declarative QoS** | Deadline, liveliness, lifespan, ownership, and reliability are set in one XML file, not in application code |
-| **Partitions and domain tag** | Isolate operational groups and separate this system from other Connext applications on the network |
-| **Request-reply** | Flight plan filing and gate assignment use DDS RPC over the same data space |
-
 ## Scenario
 
 A simulated national air-traffic control system spanning multiple airports. 
@@ -199,6 +190,7 @@ in any language, and changing them means editing
 | **"Don't deliver stale positions"** | Lifespan QoS (1 s) on `AircraftPosition`; the middleware discards old samples |
 | **"New subscribers see current state immediately"** | Transient-local durability on state, command, and handoff topics |
 | **"Only send data a subscriber needs"** | Content-filtered topics, evaluated at the writer |
+
 ## Prerequisites
 
 ### Dashboard basemap
@@ -230,13 +222,27 @@ usage limits with CARTO, and monitor the key for abuse.
 
 ### Connext DDS
 
-- **RTI Connext DDS license file.** You don't need a Connext installation,
-  because the Python package is installed automatically from PyPI. A free
-  evaluation license is available at
-  [rti.com/free-trial](https://www.rti.com/free-trial). Set
-  `RTI_LICENSE_FILE` in `.env.local` to the path of your license file before
-  running the demo.
+- **RTI Connext DDS license file.** A free Connext license file
+  (`rti_license.dat`). Download it from
+  [evaluation.rti.com/workspaces/license](https://evaluation.rti.com/workspaces/license)
+  after logging in with your RTI account. If you don't have an account, you
+  can create one on the same page; it's also free. Set `RTI_LICENSE_FILE` in
+  `.env.local` to the path of your license file before running the demo.
 - Python 3.10+
+
+The demo does not need a Connext installation: the setup script installs
+the Connext Python API (`rti.connext`) from PyPI, and the generated type
+support is checked in.
+
+#### Optional: Full Connext Installation
+
+Install RTI Connext DDS 7.7 by following the instructions at
+[evaluation.rti.com](https://evaluation.rti.com) to get two more tools:
+
+- **`rtiddsgen`**, to regenerate the Python type support after changing
+  `air_traffic_types.idl` (see the [Python README](python/README.md)).
+- **RTI Collector Service**, which `scripts/collector_start.sh` runs so you
+  can inspect the live system remotely with RTI Admin Console.
 
 ## Quick Start
 
@@ -328,6 +334,17 @@ See the [Python README](python/README.md) for more commands and the
     └── reference/                 # ATC domain reference material
 ```
 
+## Connext DDS Features Used
+
+| Connext DDS capability | What it does in this system |
+|---|---|
+| **Data-centric pub/sub** | Each aircraft writes its position once; every interested facility receives it |
+| **Writer-side content filtering** | Each facility subscribes only to its airspace or airport, and unmatched data never leaves the publisher |
+| **Durability (transient-local)** | Late-joining or restarted facilities get current flight plans, tracking state, and runway status immediately |
+| **Declarative QoS** | Deadline, liveliness, lifespan, ownership, and reliability are set in one XML file, not in application code |
+| **Partitions and domain tag** | Isolate operational groups and separate this system from other Connext applications on the network |
+| **Request-reply** | Flight plan filing and gate assignment use DDS RPC over the same data space |
+
 ## How We Built This
 
 This project was designed iteratively with AI tools, both with and without
@@ -335,3 +352,10 @@ This project was designed iteratively with AI tools, both with and without
 The [`docs/design_process/`](docs/design_process/) directory records that
 process: the prompts, the design iterations, and a comparison of designing
 with and without the Connext AI Design Expert.
+
+## Related Blueprints
+
+- [Tractor Fleet](https://github.com/rticommunity/rticonnextdds-blueprint-tractor-fleet)
+  — an autonomous tractor fleet scenario built with RTI Connext DDS, with
+  tractors, charging stations, and a fleet dashboard coordinating through
+  publish-subscribe, request-reply, partitions, durability, and liveliness.

@@ -187,7 +187,7 @@ The complete data model is defined in [`air_traffic_types.idl`](../air_traffic_t
 | Service | Request → Reply | Purpose |
 |---|---|---|
 | Flight Plan Filing | `FlightPlanRequest` → `FlightPlanResponse` | File a flight plan and receive acceptance/rejection |
-| Gate Assignment | `GateRequest` → `GateAssignmentReply` | Request a gate and receive PENDING → ASSIGNED workflow |
+| Gate Assignment | `GateRequest` → `GateAssignmentReply` | Request a gate on arrival (reply `ASSIGNED` or `REJECTED`) and release it at pushback (reply `RELEASED`) |
 
 **Enums (13):** `FlightPhase`, `InstructionType`, `AcknowledgmentStatus`, `FlightPlanStatus`, `RunwayOperationalStatus`, `WeatherCondition`, `HandoffStatus`, `AlertSeverity`, `AlertType`, `ConvectiveSeverity`, `FacilityType`, `GateAssignmentStatusKind`, `NavStatus`
 
@@ -488,8 +488,11 @@ The Connext **Request/Reply API** is built on correlated DDS topics. No special 
 ### Key API Patterns
 
 - Always call `wait_for_service()` before sending requests (endpoint discovery must complete)
-- Supports **single-request / multiple-replies** (useful for `PENDING → ASSIGNED` gate workflow)
+- Each replier sends one reply per request; the request-reply API would also
+  allow several replies to one request, which this system doesn't use
 - Service name derives topic names automatically (`FlightPlanFilingService` → request/reply topics)
+- Requesters and repliers take their QoS from the service's profile in
+  `air_traffic_qos.xml`
 
 ### Flight Plan Filing — Requester (Aircraft Side)
 
@@ -536,42 +539,40 @@ while True:
         replier.send_reply(reply, info)
 ```
 
-### Gate Assignment — Multi-Reply Pattern
+### Gate Assignment
 
-Connext supports multiple replies per request. The replier sends intermediate replies with `final=False`:
+The aircraft sends a `GateRequest` to its destination airport after parking,
+and another with `kind = PUSHBACK` before departing. Every airport's replier
+receives each request; an airport ignores requests addressed to another
+`aerodrome_id`. The addressed airport sends **one** `GateAssignmentReply`:
+`ASSIGNED` with a gate (the same gate if the flight already has one) or
+`REJECTED` when no gate is free, and `RELEASED` for a pushback, which frees
+the gate. The IDL's `GateAssignmentStatusKind` also defines `PENDING`, which
+the current workflow does not send.
 
-```python
-# Send intermediate "PENDING" reply
-replier.send_reply(pending_reply, info, final=False)
+### QoS from XML, Entities in Python
 
-# Later, send final "ASSIGNED" reply
-replier.send_reply(assigned_reply, info)  # final=True (default)
-```
-
-### XML + Python Hybrid Pattern
-
-QoS is defined in XML; Requester/Replier instantiated in Python:
+QoS is defined in XML; participants, requesters, and repliers are created in
+Python. Every application creates its participant through
+`common.create_participant()`, which loads `AtcParticipantProfile` and adds
+the domain tag, participant partitions, and name:
 
 ```python
 qos_provider = dds.QosProvider("air_traffic_qos.xml")
-participant = qos_provider.create_participant_from_config(
-    "AtcParticipantLibrary::AircraftParticipant"
+participant_qos = qos_provider.participant_qos_from_profile(
+    "AirTrafficControl_QosLib::AtcParticipantProfile"
 )
-
-writer_qos = qos_provider.datawriter_qos_from_profile(
-    "AirTrafficControl_QosLib::FlightPlanRequestReplyProfile"
-)
-reader_qos = qos_provider.datareader_qos_from_profile(
-    "AirTrafficControl_QosLib::FlightPlanRequestReplyProfile"
-)
+# common.create_participant() also sets the domain tag, partitions, and name
 
 requester = Requester(
     request_type=FlightPlanRequest,
     reply_type=FlightPlanResponse,
     participant=participant,
     service_name="FlightPlanFilingService",
-    datawriter_qos=writer_qos,
-    datareader_qos=reader_qos
+    datawriter_qos=qos_provider.datawriter_qos_from_profile(
+        "AirTrafficControl_QosLib::FlightPlanRequestReplyProfile"),
+    datareader_qos=qos_provider.datareader_qos_from_profile(
+        "AirTrafficControl_QosLib::FlightPlanRequestReplyProfile"),
 )
 ```
 
@@ -798,20 +799,22 @@ Aircraft do **not** subscribe to the `Handoff` topic. They are entirely passive 
 
 ---
 
-## 14. Connext 7.7.0 Features to Leverage
+## 14. Connext 7.7.0 Features Used
 
 | Feature | Usage in ATC System |
 |---|---|
-| **XML-Based Application Creation** | Centralize domain/topic/QoS definitions; share same XML across all apps |
+| **QoS profiles in XML** | All QoS in `air_traffic_qos.xml`, loaded with `QosProvider`; every application uses the same file |
 | **rtiddsgen Python Code Generation** | Types defined in IDL, generated to Python via `rtiddsgen -language Python`; all apps import generated `air_traffic_types.py` |
 | **Modern Python API** | `rti.connextdds` for pub/sub; `rti.rpc` `Requester`/`Replier` for request-reply |
 | **Built-in QoS Profiles** | Inherit from `Pattern.PeriodicData`, `Pattern.Status`, `Pattern.RPC`, etc. |
 | **QoS Snippets** | Compose with `QosSnippetLib` for discovery optimization |
 | **Content-Filtered Topics** | Writer-side filtering for reduced bandwidth |
-| **Request/Reply with multi-reply** | Gate assignment `PENDING → ASSIGNED` workflow |
+| **Request/Reply** | Flight plan filing and gate assignment, one reply per request |
 | **`wait_for_service()`** | Robust discovery for Request/Reply before first request |
-| **Topic filter overrides** | `topic_filter="WeatherReport"` for per-topic QoS within a shared profile |
-| **Zero Copy** | Reserved for future large-data flows (radar tiles, maps); not needed for current types |
+
+Not used today, but natural extensions: multiple replies per request (for
+example a `PENDING` gate reply before `ASSIGNED`), and Zero Copy for future
+large-data flows such as radar tiles or maps.
 
 ---
 
@@ -879,6 +882,5 @@ outside its area of coverage.
 - [Content-Filtered Topics Guide](https://community.rti.com/static/documentation/connext-dds/7.7.0/doc/manuals/connext_dds_professional/getting_started_guide/csharp/intro_content_filters.html)
 - [Request-Reply Pattern](https://community.rti.com/static/documentation/connext-dds/7.7.0/doc/manuals/connext_dds_professional/users_manual/users_manual/The_Request_Reply_Pattern.htm)
 - [PARTITION QoS Policy](https://community.rti.com/static/documentation/connext-dds/7.7.0/doc/manuals/connext_dds_professional/users_manual/users_manual/PARTITION_QosPolicy.htm)
-- [XML Application Creation](https://community.rti.com/static/documentation/connext-dds/7.7.0/doc/api/connext_dds/api_python/xmlapp.html)
 - [Multi-Channel DataWriters](https://community.rti.com/static/documentation/connext-dds/7.7.0/doc/manuals/connext_dds_professional/users_manual/users_manual/MultichannelDatawriters.htm)
 - [Extensible Types Guide](https://community.rti.com/static/documentation/connext-dds/7.7.0/doc/manuals/connext_dds_professional/extensible_types_guide/extensible_types/Defining_Extensible_Types.htm)
